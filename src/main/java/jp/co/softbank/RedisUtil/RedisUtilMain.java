@@ -2,6 +2,7 @@ package jp.co.softbank.RedisUtil;
 
 import java.awt.BorderLayout;
 import java.awt.Container;
+import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -94,6 +95,7 @@ public class RedisUtilMain implements ActionListener {
 		
 		// CENTER
 		textArea = new JTextArea();
+		textArea.setFont(new Font("MS ゴシック", Font.BOLD, 16));
 		scrollPane = new JScrollPane(textArea);
 		scrollPane.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 		
@@ -200,10 +202,15 @@ public class RedisUtilMain implements ActionListener {
 						}
 						textArea.append("##### ハッシュ値 #####");
 						textArea.append(System.lineSeparator());
-						// JSONObject jsonObject = JSONObject.fromObject(entry.getValue());
-						// textArea.append(jsonObject.toString(4));
-						textArea.append(entry.getValue());
-						textArea.append(System.lineSeparator());
+						String entryValue = entry.getValue();
+						entryValue = entryValue.trim();
+						if (entryValue.startsWith("[") && entryValue.endsWith("]")) {
+							entryValue = "{" + "'" + entry.getKey() + "' : " + entryValue + "}";
+						}
+						JSONObject jsonObject = JSONObject.fromObject(entryValue);
+						textArea.append(jsonObject.toString(4));
+						// textArea.append(entry.getValue());
+						// textArea.append(System.lineSeparator());
 						textArea.append(System.lineSeparator());
 						preKey.push(entry.getKey());
 					}
