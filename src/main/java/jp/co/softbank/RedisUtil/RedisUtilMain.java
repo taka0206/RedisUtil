@@ -200,8 +200,9 @@ public class RedisUtilMain implements ActionListener {
 						}
 						textArea.append("##### ハッシュ値 #####");
 						textArea.append(System.lineSeparator());
-						JSONObject jsonObject = JSONObject.fromObject(entry.getValue());
-						textArea.append(jsonObject.toString(4));
+						// JSONObject jsonObject = JSONObject.fromObject(entry.getValue());
+						// textArea.append(jsonObject.toString(4));
+						textArea.append(entry.getValue());
 						textArea.append(System.lineSeparator());
 						textArea.append(System.lineSeparator());
 						preKey.push(entry.getKey());
