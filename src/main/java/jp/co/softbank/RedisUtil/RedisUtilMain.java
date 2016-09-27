@@ -6,6 +6,14 @@ import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -51,6 +59,7 @@ public class RedisUtilMain implements ActionListener {
 	private JButton keyAllButton;
 	private JButton selectButton;
 	private JButton addButton;
+	private JButton deleteButton;
 	
 	public RedisUtilMain() {
 		
@@ -95,7 +104,7 @@ public class RedisUtilMain implements ActionListener {
 		
 		// CENTER
 		textArea = new JTextArea();
-		textArea.setFont(new Font("MS ゴシック", Font.BOLD, 16));
+		textArea.setFont(new Font("MS Gothic", Font.PLAIN, 14));
 		scrollPane = new JScrollPane(textArea);
 		scrollPane.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 		
@@ -103,14 +112,17 @@ public class RedisUtilMain implements ActionListener {
 		keyAllButton = new JButton("キー全検索");
 		selectButton = new JButton("検索");
 		addButton = new JButton("登録");
+		deleteButton = new JButton("削除");
 		keyAllButton.addActionListener(this);
 		selectButton.addActionListener(this);
 		addButton.addActionListener(this);
+		deleteButton.addActionListener(this);
 		
 		buttonPane = new JPanel();
 		buttonPane.add(keyAllButton);
 		buttonPane.add(selectButton);
 		buttonPane.add(addButton);
+		buttonPane.add(deleteButton);
 		
 		contentPane.add(topPane, BorderLayout.NORTH);
 		// contentPane.add(westPane, BorderLayout.WEST);
@@ -118,9 +130,25 @@ public class RedisUtilMain implements ActionListener {
 		contentPane.add(buttonPane, BorderLayout.SOUTH);
 		
 		// 初期値設定
-		connectField.setText("127.0.0.1");
-		portField.setText("6379");
-		
+		Path path = FileSystems.getDefault().getPath(
+				System.getProperty("user.home") + 
+				File.separator + 
+				".redisutil_conf.properties");
+		try {
+			List<String> fileData = Files.readAllLines(path);
+			for (String data : fileData) {
+				String[] tmp = data.split(",");
+				connectField.setText(tmp[0]);
+				portField.setText(tmp[1]);
+				if (tmp.length == 3) {
+					authField.setText(tmp[2]);
+				}
+			}	
+		} catch (Exception e) {
+			// 初期値設定
+			connectField.setText("127.0.0.1");
+			portField.setText("6379");
+		}
 		mainFrame.setVisible(true);
 	}
 	
@@ -131,9 +159,16 @@ public class RedisUtilMain implements ActionListener {
 	
 	public void actionPerformed(ActionEvent e) {
 		try {
+			StringBuilder sb = new StringBuilder();
+			Path path = FileSystems.getDefault().getPath(
+					System.getProperty("user.home") + 
+					File.separator + 
+					".redisutil_conf.properties");
+			System.out.println(path);
 			String address = connectField.getText();
 			if (!StringUtils.isBlank(address)) {
 				address = address.trim();
+				sb.append(address);
 			} else {
 				textArea.setText(null);
 				textArea.append("接続先を設定して下さい");
@@ -142,6 +177,7 @@ public class RedisUtilMain implements ActionListener {
 			String strPort = portField.getText();
 			if (!StringUtils.isBlank(strPort)) {
 				strPort = strPort.trim();
+				sb.append("," + strPort);
 			} else {
 				textArea.setText(null);
 				textArea.append("ポートを設定して下さい");
@@ -153,12 +189,16 @@ public class RedisUtilMain implements ActionListener {
 			String auth = authField.getText();
 			if (StringUtils.isNotBlank(auth)) {
 				auth = auth.trim();
+				sb.append("," + auth);
 				jedis.auth(auth);
 			}
+			Files.write(path, sb.toString().getBytes("UTF-8"));
 			if (e.getSource() == keyAllButton) {
 				textArea.setText(null);
 				Set<String> keys = jedis.keys("*");
-				for (String key : keys) {
+				List<String> sortKeyList = new ArrayList<String>(keys);
+				Collections.sort(sortKeyList);
+				for (String key : sortKeyList) {
 					textArea.append(key);
 					textArea.append(System.lineSeparator());
 				}
@@ -190,17 +230,23 @@ public class RedisUtilMain implements ActionListener {
 					}
 				} else if ("hash".equals(keyType)) {
 					System.out.println("hash");
+					textArea.append("+++++　キー有効期限  +++++");
+					textArea.append(System.lineSeparator());
+					textArea.append(jedis.ttl(key).toString());
+					textArea.append(System.lineSeparator());
+					textArea.append(System.lineSeparator());
 					Map<String, String> valueMap =  jedis.hgetAll(key);
 					Stack<String> preKey = new Stack<String>();
 					for (Entry<String, String> entry : valueMap.entrySet()) {
 						System.out.println(entry);
 						if ( preKey.isEmpty() || !preKey.pop().equals(entry.getKey())) {
-							textArea.append("##### ハッシュフィールド #####");
+							textArea.append("+++++ ハッシュフィールド +++++");
 							textArea.append(System.lineSeparator());
 							textArea.append(entry.getKey());
 							textArea.append(System.lineSeparator());
+							textArea.append(System.lineSeparator());
 						}
-						textArea.append("##### ハッシュ値 #####");
+						textArea.append("----- ハッシュ値 -----");
 						textArea.append(System.lineSeparator());
 						String entryValue = entry.getValue();
 						entryValue = entryValue.trim();
@@ -212,6 +258,7 @@ public class RedisUtilMain implements ActionListener {
 						// textArea.append(entry.getValue());
 						// textArea.append(System.lineSeparator());
 						textArea.append(System.lineSeparator());
+						textArea.append(System.lineSeparator());
 						preKey.push(entry.getKey());
 					}
 				} else {
@@ -220,15 +267,24 @@ public class RedisUtilMain implements ActionListener {
 				}
 			}
 			if (e.getSource() == addButton) {
+				textArea.setText("登録ボタンは利用出来ません");
+				return;
+//				String key = keyField.getText();
+//				if (StringUtils.isNotBlank(key)) {
+//					key = key.trim();
+//				}
+//				String value = textArea.getText();
+//				jedis.hset("testHash", "authInfo", "{\"test\":\"test\",\"test2\":\"test2\"}");
+//				jedis.hset("testHash", "userInfo", "{\"test3\":\"test3\"}");
+//				jedis.hset("testHash", "setterInfo", "{\"test4\":\"test4\",\"test5\":\"test5\",\"test6\":\"test6\"}");
+				// jedis.set(key, value);
+			}
+			if (e.getSource() == deleteButton) {
 				String key = keyField.getText();
 				if (StringUtils.isNotBlank(key)) {
 					key = key.trim();
 				}
-				String value = textArea.getText();
-				jedis.hset("testHash", "authInfo", "{\"test\":\"test\",\"test2\":\"test2\"}");
-				jedis.hset("testHash", "userInfo", "{\"test3\":\"test3\"}");
-				jedis.hset("testHash", "setterInfo", "{\"test4\":\"test4\",\"test5\":\"test5\",\"test6\":\"test6\"}");
-				// jedis.set(key, value);
+				jedis.del(key);
 			}
 			jedis.disconnect();
 		} catch (Exception exp) {
