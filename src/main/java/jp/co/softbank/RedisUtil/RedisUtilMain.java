@@ -145,6 +145,7 @@ public class RedisUtilMain implements ActionListener {
 				}
 			}	
 		} catch (Exception e) {
+			textArea.setText("設定ファイルが見つかりません.初期値をロードします");
 			// 初期値設定
 			connectField.setText("127.0.0.1");
 			portField.setText("6379");
