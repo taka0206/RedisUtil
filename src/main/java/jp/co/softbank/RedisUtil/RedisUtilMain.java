@@ -30,6 +30,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 
 import net.sf.json.JSONObject;
@@ -49,6 +50,8 @@ public class RedisUtilMain implements ActionListener {
 	private JTextField authField;
 	private JLabel keyLabel;
 	private JTextField keyField;
+	private JLabel updateHashKeyLabel;
+	private JTextField updateHashKeyField;
 	private JPanel westPane;
 	private JLabel westLabel;
 	private JComboBox<Object> combo;
@@ -59,6 +62,7 @@ public class RedisUtilMain implements ActionListener {
 	private JButton keyAllButton;
 	private JButton selectButton;
 	private JButton addButton;
+	private JButton expireButton;
 	private JButton deleteButton;
 	
 	public RedisUtilMain() {
@@ -73,7 +77,7 @@ public class RedisUtilMain implements ActionListener {
 		// NORTH
 		topPane = new JPanel();
 		topPane.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-		topPane.setLayout(new GridLayout(4, 4));
+		topPane.setLayout(new GridLayout(5, 5));
 		connectLabel = new JLabel("接続:");
 		connectField = new JTextField();
 		portLabel = new JLabel("ポート:");
@@ -82,6 +86,9 @@ public class RedisUtilMain implements ActionListener {
 		authField = new JTextField();
 		keyLabel = new JLabel("キーを入力:");
 		keyField = new JTextField();
+		updateHashKeyLabel = new JLabel("ハッシュキーを入力:");
+		updateHashKeyField = new JTextField();
+		
 		
 		topPane.add(connectLabel);
 		topPane.add(connectField);
@@ -92,6 +99,8 @@ public class RedisUtilMain implements ActionListener {
 		topPane.add(authField);
 		topPane.add(keyLabel);
 		topPane.add(keyField);
+		topPane.add(updateHashKeyLabel);
+		topPane.add(updateHashKeyField);
 		
 		// WEST
 		westPane = new JPanel();
@@ -111,17 +120,20 @@ public class RedisUtilMain implements ActionListener {
 		// SOUTH
 		keyAllButton = new JButton("キー全検索");
 		selectButton = new JButton("検索");
-		addButton = new JButton("登録");
+		addButton = new JButton("追加・更新");
+		expireButton = new JButton("有効期限無期限化");
 		deleteButton = new JButton("削除");
 		keyAllButton.addActionListener(this);
 		selectButton.addActionListener(this);
 		addButton.addActionListener(this);
+		expireButton.addActionListener(this);
 		deleteButton.addActionListener(this);
 		
 		buttonPane = new JPanel();
 		buttonPane.add(keyAllButton);
 		buttonPane.add(selectButton);
 		buttonPane.add(addButton);
+		buttonPane.add(expireButton);
 		buttonPane.add(deleteButton);
 		
 		contentPane.add(topPane, BorderLayout.NORTH);
@@ -159,6 +171,7 @@ public class RedisUtilMain implements ActionListener {
 	
 	
 	public void actionPerformed(ActionEvent e) {
+		Jedis jedis = null;
 		try {
 			StringBuilder sb = new StringBuilder();
 			Path path = FileSystems.getDefault().getPath(
@@ -185,7 +198,7 @@ public class RedisUtilMain implements ActionListener {
 			}
 
 			int port = Integer.parseInt(strPort);
-			Jedis jedis = new Jedis(address, port, 1000);
+			jedis = new Jedis(address, port, 1000);
 			jedis.connect();
 			String auth = authField.getText();
 			if (StringUtils.isNotBlank(auth)) {
@@ -231,36 +244,49 @@ public class RedisUtilMain implements ActionListener {
 					}
 				} else if ("hash".equals(keyType)) {
 					System.out.println("hash");
-					textArea.append("+++++　キー有効期限  +++++");
-					textArea.append(System.lineSeparator());
-					textArea.append(jedis.ttl(key).toString());
-					textArea.append(System.lineSeparator());
-					textArea.append(System.lineSeparator());
-					Map<String, String> valueMap =  jedis.hgetAll(key);
-					Stack<String> preKey = new Stack<String>();
-					for (Entry<String, String> entry : valueMap.entrySet()) {
-						System.out.println(entry);
-						if ( preKey.isEmpty() || !preKey.pop().equals(entry.getKey())) {
-							textArea.append("+++++ ハッシュフィールド +++++");
-							textArea.append(System.lineSeparator());
-							textArea.append(entry.getKey());
-							textArea.append(System.lineSeparator());
-							textArea.append(System.lineSeparator());
+					String updateHashKey = updateHashKeyField.getText();
+					if (StringUtils.isNotBlank(updateHashKey)) {
+						updateHashKey = updateHashKey.trim();
+						List<String> values = jedis.hmget(key, updateHashKey);
+						if (CollectionUtils.isEmpty(values)) {
+							textArea.append("指定されたハッシュキーに紐付く値が取得出来ませんでした");
+							return;
 						}
-						textArea.append("----- ハッシュ値 -----");
-						textArea.append(System.lineSeparator());
-						String entryValue = entry.getValue();
-						entryValue = entryValue.trim();
-						if (entryValue.startsWith("[") && entryValue.endsWith("]")) {
-							entryValue = "{" + "'" + entry.getKey() + "' : " + entryValue + "}";
+						for (String value : values) {
+							textArea.append(value);
 						}
-						JSONObject jsonObject = JSONObject.fromObject(entryValue);
-						textArea.append(jsonObject.toString(4));
-						// textArea.append(entry.getValue());
-						// textArea.append(System.lineSeparator());
+					} else {
+						textArea.append("+++++　キー有効期限  +++++");
+						textArea.append(System.lineSeparator());
+						textArea.append(jedis.ttl(key).toString());
 						textArea.append(System.lineSeparator());
 						textArea.append(System.lineSeparator());
-						preKey.push(entry.getKey());
+						Map<String, String> valueMap =  jedis.hgetAll(key);
+						Stack<String> preKey = new Stack<String>();
+						for (Entry<String, String> entry : valueMap.entrySet()) {
+							System.out.println(entry);
+							if ( preKey.isEmpty() || !preKey.pop().equals(entry.getKey())) {
+								textArea.append("+++++ ハッシュフィールド +++++");
+								textArea.append(System.lineSeparator());
+								textArea.append(entry.getKey());
+								textArea.append(System.lineSeparator());
+								textArea.append(System.lineSeparator());
+							}
+							textArea.append("----- ハッシュ値 -----");
+							textArea.append(System.lineSeparator());
+							String entryValue = entry.getValue();
+							entryValue = entryValue.trim();
+							if (entryValue.startsWith("[") && entryValue.endsWith("]")) {
+								entryValue = "{" + "'" + entry.getKey() + "' : " + entryValue + "}";
+							}
+							JSONObject jsonObject = JSONObject.fromObject(entryValue);
+							textArea.append(jsonObject.toString(4));
+							// textArea.append(entry.getValue());
+							// textArea.append(System.lineSeparator());
+							textArea.append(System.lineSeparator());
+							textArea.append(System.lineSeparator());
+							preKey.push(entry.getKey());
+						}
 					}
 				} else {
 					textArea.setText(null);
@@ -268,29 +294,120 @@ public class RedisUtilMain implements ActionListener {
 				}
 			}
 			if (e.getSource() == addButton) {
-				textArea.setText("登録ボタンは利用出来ません");
-				return;
-//				String key = keyField.getText();
-//				if (StringUtils.isNotBlank(key)) {
-//					key = key.trim();
-//				}
-//				String value = textArea.getText();
-//				jedis.hset("testHash", "authInfo", "{\"test\":\"test\",\"test2\":\"test2\"}");
-//				jedis.hset("testHash", "userInfo", "{\"test3\":\"test3\"}");
-//				jedis.hset("testHash", "setterInfo", "{\"test4\":\"test4\",\"test5\":\"test5\",\"test6\":\"test6\"}");
-				// jedis.set(key, value);
+
+				String key = keyField.getText();
+				if (StringUtils.isNotBlank(key)) {
+					key = key.trim();
+				} else {
+					textArea.setText(null);
+					textArea.append("キーを入力して下さい");
+					return;
+				}
+				String value = textArea.getText();
+				if (StringUtils.isNotBlank(value)) {
+					value = value.trim();
+				} else {
+					textArea.setText(null);
+					textArea.append("値を入力して下さい");
+					return;
+				}
+				String keyType = jedis.type(key);
+				if ("string".equals(keyType)) {
+					String result = jedis.set(key, value);
+					textArea.setText(null);
+					if (result.equals("OK")) {
+						textArea.append("値の追加・更新に成功しました。");
+					} else {
+						textArea.append("不明なエラーが発生しました。");
+					}
+				} else if ("list".equals(keyType)) {
+					
+					Long result = jedis.rpush(key, value);
+					textArea.setText(null);
+					textArea.append("リスト追加結果:" + result);
+				} else if ("set".equals(keyType)) {
+					textArea.setText(null);
+					textArea.append("指定されたキーの型（set）は対応していません");
+					return;
+				} else if ("zset".equals(keyType)) {
+					textArea.setText(null);
+					textArea.append("指定されたキーの型（zset）は対応していません");
+					return;
+				} else if ("hash".equals(keyType)) {
+					System.out.println("hash");
+					String hashFieldKey = updateHashKeyField.getText();
+					if (StringUtils.isNotBlank(hashFieldKey)) {
+						hashFieldKey = hashFieldKey.trim();
+					}
+					String hashFieldValue = textArea.getText();
+					Long result = jedis.hset(key, hashFieldKey, hashFieldValue);
+					textArea.setText(null);
+					if (result.equals(new Long(1))) {
+						textArea.append("フィールドが新しく追加されました。");
+					} else if (result.equals(new Long(0))) {
+						textArea.append("フィールドの更新に成功しました。");
+					} else {
+						textArea.append("不明なエラーです");
+					}
+				} else {
+					String hashFieldKey = updateHashKeyField.getText();
+					if (StringUtils.isNotBlank(hashFieldKey)) {
+						hashFieldKey = hashFieldKey.trim();
+					}
+					if (StringUtils.isNotBlank(hashFieldKey)) {
+						// ハッシュ型新規追加
+						System.out.println("hash");
+						String hashFieldValue = textArea.getText();
+						Long result = jedis.hset(key, hashFieldKey, hashFieldValue);
+						textArea.setText(null);
+						if (result.equals(new Long(1))) {
+							textArea.append("フィールドが新しく追加されました。");
+						} else if (result.equals(new Long(0))) {
+							textArea.append("フィールドの更新に成功しました。");
+						} else {
+							textArea.append("不明なエラーです");
+						}
+					} else {
+						String result = jedis.set(key, value);
+						textArea.setText(null);
+						if (result.equals("OK")) {
+							textArea.append("値の追加・更新に成功しました。");
+						} else {
+							textArea.append("不明なエラーが発生しました。");
+						}
+					}
+				}
 			}
+			if (e.getSource() == expireButton) {
+				String key = keyField.getText();
+				if (StringUtils.isNotBlank(key)) {
+					key = key.trim();
+				}
+				Long result = jedis.persist(key);
+				textArea.setText(null);
+				if (result.equals(new Long(1))) {
+					textArea.append("タイムアウト値は正常に削除されました。");
+				} else if (result.equals(new Long(0))){
+					textArea.append("キーが存在しないか、タイムアウト値は既に存在しません.");
+				} else {
+					textArea.append("不明なエラーです");
+				}
+			}
+			
 			if (e.getSource() == deleteButton) {
 				String key = keyField.getText();
 				if (StringUtils.isNotBlank(key)) {
 					key = key.trim();
 				}
-				jedis.del(key);
+				Long result = jedis.del(key);
+				textArea.setText(null);
+				textArea.append("削除されたキーの数:" + result);
 			}
-			jedis.disconnect();
 		} catch (Exception exp) {
 			textArea.setText(null);
 			textArea.append(exp.getMessage());
+		} finally {
+			jedis.disconnect();
 		}
 	}
 }
